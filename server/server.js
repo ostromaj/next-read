@@ -73,22 +73,22 @@ function simplifySummary(s) {
       if (OUT_WORDS.test(inj.status || "") && inj.athlete?.id) out.add(String(inj.athlete.id));
     }
   }
-  const receiving = {};
+  const receiving = {}, teamTargets = {};
   for (const team of s.boxscore?.players || []) {
+    const tAbbr = abbr(team.team?.abbreviation || "");
     for (const cat of team.statistics || []) {
       if (cat.name !== "receiving") continue;
       const keys = cat.keys || [];
       const iRec = keys.indexOf("receptions"), iTgt = keys.indexOf("receivingTargets");
       for (const a of cat.athletes || []) {
         if (!a.athlete?.id || !a.stats) continue;
-        receiving[String(a.athlete.id)] = {
-          rec: iRec >= 0 ? +a.stats[iRec] || 0 : 0,
-          tgt: iTgt >= 0 ? +a.stats[iTgt] || 0 : null,
-        };
+        const rec = iRec >= 0 ? +a.stats[iRec] || 0 : 0, tgt = iTgt >= 0 ? +a.stats[iTgt] || 0 : null;
+        receiving[String(a.athlete.id)] = { rec, tgt, team: tAbbr };
+        if (tgt != null) teamTargets[tAbbr] = (teamTargets[tAbbr] || 0) + tgt;
       }
     }
   }
-  return { out: [...out], receiving };
+  return { out: [...out], receiving, teamTargets };
 }
 
 // tiny cache so many viewers share one upstream request

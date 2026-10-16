@@ -9,18 +9,18 @@
 :root {
   --ink: #12161d; --paper: #f3f4f1; --panel: #ffffff; --line: #d9dcd6; --muted: #5d6470;
   --yellow: #b98a00; --yellow-fill: #f2c230; --turf: #2f6b47; --turf-dark: #23543a; --hash: rgba(255,255,255,.55);
-  --bar-track: #e7e9e4; --bar: #2b3340; --bad: #b23a2e; --live: #c8372b; --flash: rgba(242,194,48,.35);
+  --bar-track: #e7e9e4; --bar: #2b3340; --bad: #b23a2e; --good: #2f7d4f; --live: #c8372b; --flash: rgba(242,194,48,.35);
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
   --body: "Barlow", "Segoe UI", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --ink: #e9ecef; --paper: #0e1218; --panel: #161b23; --line: #29303b; --muted: #9aa3b0;
   --yellow: #f2c230; --yellow-fill: #f2c230; --turf: #24563a; --turf-dark: #1b442d; --hash: rgba(255,255,255,.45);
-  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark } }
+  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --good: #6fcf97; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark } }
 :root[data-theme="dark"] {
   --ink: #e9ecef; --paper: #0e1218; --panel: #161b23; --line: #29303b; --muted: #9aa3b0;
   --yellow: #f2c230; --yellow-fill: #f2c230; --turf: #24563a; --turf-dark: #1b442d; --hash: rgba(255,255,255,.45);
-  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark }
+  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --good: #6fcf97; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark }
 
 * { box-sizing: border-box; }
 body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
@@ -109,6 +109,8 @@ ol.players { list-style: none; margin: 0; padding: 0; }
 .who .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who .sub { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .flag { color: var(--bad); }
+.up { color: var(--good); font-weight: 600; }
+.dn { color: var(--muted); font-weight: 600; }
 .barline { margin-top: 5px; height: 6px; background: var(--bar-track); border-radius: 3px; overflow: hidden; }
 .barline i { display: block; height: 100%; background: var(--bar); border-radius: 3px; transition: width .4s ease; }
 .pl.top .barline i { background: var(--yellow); }
@@ -189,13 +191,21 @@ let games = [], detail = {}, current = null, example = false, lastOk = 0, prevPc
 const fb = y => y > 80 ? "own0-20" : y > 60 ? "own20-40" : y > 40 ? "mid" : y > 20 ? "opp20-40" : "redzone";
 const db = d => d === 1 ? "1" : d === 2 ? "2" : "3+";
 const sb = s => s <= -9 ? "trail9" : s < 0 ? "trail" : s === 0 ? "tied" : s <= 8 ? "lead" : "lead9";
-function predict(team, y, down, score, twoMin, outEspn) {
+// Live update: this game's targets and catches pull each player's share and catch rate toward what's
+// happening today. K_LIVE / KC_LIVE (fit in the backtest) = how many in-game targets the pregame numbers are worth.
+function predict(team, y, down, score, twoMin, outEspn, today, teamTgt) {
+  const K = MODEL.k_live, KC = MODEL.kc_live, useLive = !!(today && teamTgt > 0 && K);
   const t = MODEL.teams[team]; if (!t) return null;
   const rem = (MODEL.volume[`${fb(y)}|${db(down)}|${sb(score)}|${twoMin ? "2min" : "normal"}`] ?? MODEL.league_rem_mean) * t.mult * (MODEL.cal || 1);
   const act = { rz: y <= 20, "3d": down >= 3, trail: score <= -9, "2min": twoMin, lead: score >= 9 };
   const live = t.players.filter(p => !(p.espn && outEspn.has(p.espn)));
-  let tot = 0; const raw = live.map(p => { let s = p.share; for (const c in act) if (act[c]) s *= p.ctx[c]; tot += s; return s; });
-  const rows = live.map((p, i) => { const lam = raw[i] / (tot || 1) * rem; return { p, xt: lam, pt: 1 - Math.exp(-lam), pc: 1 - Math.exp(-lam * p.catch) }; });
+  const td = p => (today && p.espn && today[p.espn]) || null;
+  let tot = 0; const raw = live.map(p => { let s = p.share; const t = td(p); if (useLive) s = (K * s + (t && t.tgt != null ? t.tgt : 0)) / (K + teamTgt); for (const c in act) if (act[c]) s *= p.ctx[c]; tot += s; return s; });
+  const rows = live.map((p, i) => {
+    const lam = raw[i] / (tot || 1) * rem, t = td(p);
+    const cr = useLive && KC && t && t.tgt != null ? (KC * p.catch + t.rec) / (KC + t.tgt) : p.catch;
+    return { p, xt: lam, pt: 1 - Math.exp(-lam), pc: 1 - Math.exp(-lam * cr) };
+  });
   rows.sort((a, b) => b.pc - a.pc);
   return { rows, rem, out: t.players.filter(p => p.espn && outEspn.has(p.espn)) };
 }
@@ -259,16 +269,19 @@ function renderList() {
   }
 }
 
-function boardHTML(team, title, sub, res, today, flashOn) {
+function boardHTML(team, title, sub, res, today, flashOn, base) {
+  const baseBy = {}; (base ? base.rows : []).forEach(r => { baseBy[r.p.id] = r.pc; });
   if (!res) return `<div class="board"><div class="board-head"><h2>${esc(title)}</h2></div><p class="board-foot">No model data for ${esc(team)} yet.</p></div>`;
   const maxPc = Math.max(...res.rows.map(r => r.pc), 0.01);
   const rows = res.rows.map((r, i) => {
     const key = team + ":" + r.p.id, was = prevPc[key], changed = flashOn && was != null && Math.abs(was - r.pc) >= 0.04;
     prevPc[key] = r.pc;
     const s = today[r.p.espn];
+    const b0 = baseBy[r.p.id], dlt = b0 != null ? Math.round((r.pc - b0) * 100) : 0;
+    const move = Math.abs(dlt) >= 2 ? `<span class="${dlt > 0 ? "up" : "dn"}" title="Change from today's usage">${dlt > 0 ? "▲" : "▼"} ${Math.abs(dlt)} pts today</span>` : "";
     const flag = r.p.games_since > 0 ? `<span class="flag">missed last ${r.p.games_since === 1 ? "game" : r.p.games_since + " games"}</span>` : "";
     return `<li class="pl${i === 0 ? " top" : ""}${changed ? " flash" : ""}"><div class="who"><div class="nm">${esc(r.p.name)}</div>
-      <div class="sub"><span>${esc(r.p.pos)}</span><span>Season ${r.p.rec} rec</span>${flag}</div>
+      <div class="sub"><span>${esc(r.p.pos)}</span><span>Season ${r.p.rec} rec</span>${move}${flag}</div>
       <div class="barline"><i style="width:${(r.pc / maxPc * 100).toFixed(1)}%"></i></div></div>
       <div class="r today">${s ? `${s.rec}/${s.tgt ?? "–"}` : "–"}</div><div class="r pc">${pct(r.pc)}</div><div class="r pt">${pct(r.pt)}</div></li>`;
   }).join("");
@@ -279,7 +292,8 @@ function boardHTML(team, title, sub, res, today, flashOn) {
 }
 
 function renderGame(g) {
-  const d = detail[g.id] || {}, outSet = new Set(d.out || []), today = d.receiving || {};
+  const d = detail[g.id] || {}, outSet = new Set(d.out || []), today = d.receiving || {}, tt = d.teamTargets || {};
+  const P = (t, yy, dn, sc, two) => [predict(t, yy, dn, sc, two, outSet, today, tt[t] || 0), predict(t, yy, dn, sc, two, outSet, null, 0)];
   const poss = g.state === "in" ? g.posteam : null;
   const tm = (t, s, side) => `${side === "h" ? `<span class="n">${s}</span>` : ""}${poss === t ? '<span class="poss" aria-label="has the ball"></span>' : ""}<span>${esc(t)}</span>${side === "a" ? `<span class="n">${s}</span>` : ""}`;
   $("awayTm").innerHTML = g.state === "pre" ? esc(g.away) : tm(g.away, g.awayScore, "a");
@@ -305,15 +319,16 @@ function renderGame(g) {
 
   let html = "";
   if (live) {
-    const res = predict(poss, y, g.down, g.scoreDiff || 0, g.halfSeconds != null && g.halfSeconds <= 120, outSet);
-    html += boardHTML(poss, `${TEAMS[poss] || poss} have the ball`, "Chance of at least one catch before this drive ends", res, today, true);
+    const [res, base] = P(poss, y, g.down, g.scoreDiff || 0, g.halfSeconds != null && g.halfSeconds <= 120);
+    html += boardHTML(poss, `${TEAMS[poss] || poss} have the ball`, "Chance of at least one catch before this drive ends", res, today, true, base);
     const other = poss === g.home ? g.away : g.home;
-    const res2 = predict(other, 75, 1, -(g.scoreDiff || 0), false, outSet);
-    html += boardHTML(other, `${TEAMS[other] || other} next drive`, "If they start at their own 25", res2, today, false);
+    const [res2, base2] = P(other, 75, 1, -(g.scoreDiff || 0), false);
+    html += boardHTML(other, `${TEAMS[other] || other} next drive`, "If they start at their own 25", res2, today, false, base2);
   } else {
     for (const t of [g.away, g.home]) {
       const diff = g.state === "pre" ? 0 : (t === g.home ? g.homeScore - g.awayScore : g.awayScore - g.homeScore);
-      html += boardHTML(t, `${TEAMS[t] || t} ${g.state === "pre" ? "opening drive" : "next drive"}`, "Starting at their own 25", predict(t, 75, 1, g.state === "pre" ? 0 : diff, false, outSet), today, false);
+      const [r1, r0] = P(t, 75, 1, g.state === "pre" ? 0 : diff, false);
+      html += boardHTML(t, `${TEAMS[t] || t} ${g.state === "pre" ? "opening drive" : "next drive"}`, "Starting at their own 25", r1, today, false, r0);
     }
   }
   $("boards").innerHTML = html;
@@ -333,8 +348,8 @@ function drawCalib() {
   pts.forEach(p => { g += `<circle cx="${x(p.pred)}" cy="${y(p.actual)}" r="${3 + 6 * Math.sqrt(p.n / nMax)}" fill="var(--yellow)" fill-opacity=".85"><title>Predicted ${pct(p.pred)}, happened ${pct(p.actual)}</title></circle>`; });
   g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="10" fill="var(--muted)">Predicted chance of a catch</text>`;
   $("calib").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Predicted vs actual catch rate">${g}</svg>`;
-  const b = BACKTEST, imp = ((1 - b.week5_brier_model / b.week5_brier_naive) * 100).toFixed(1);
-  $("recText").textContent = `Tested on ${b.all_drives.toLocaleString()} real drives from Weeks 3–5, each predicted using only earlier games. The top pick caught a pass on ${pct(b.all_top_pick_caught)} of drives. On the untouched Week 5 test it beat a plain "season target share" guess by ${imp}%.`;
+  const b = BACKTEST, imp = ((1 - b.week5_brier_model / b.week5_brier_naive) * 100).toFixed(1), live = ((1 - b.week5_brier_model / b.week5_brier_no_live) * 100).toFixed(1);
+  $("recText").textContent = `Tested on ${b.all_drives.toLocaleString()} real drives from Weeks 3–5, each predicted using only what was known before that drive, including the targets and catches earlier in the same game. The top pick caught a pass on ${pct(b.all_top_pick_caught)} of drives. On the untouched Week 5 test, live in-game updating cut error ${live}%, and ${imp}% versus a plain season-share guess.`;
 }
 
 // Example data, used only when the live feed can't be reached (e.g. inside a preview)

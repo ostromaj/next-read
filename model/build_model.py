@@ -24,6 +24,8 @@ K_CTX = float(os.environ.get("K_CTX", 8.0))  # shrinkage: weighted targets neede
 K_CATCH = 15.0      # shrinkage for catch rate toward position average
 A_SHARE = float(os.environ.get("A_SHARE", 0))  # weighted targets of pull toward an even split
 CAL = float(os.environ.get("CAL", 1.0))  # overall scale on expected targets (calibration)
+K_LIVE = float(os.environ.get("K_LIVE", 1e9))  # live: how many in-game targets the pregame share is worth
+KC_LIVE = float(os.environ.get("KC_LIVE", 1e9))  # live: how many in-game targets the catch rate is worth
 COLS = ["season", "season_type", "week", "game_id", "game_date", "posteam", "defteam", "fixed_drive",
         "play_id", "down", "ydstogo", "yardline_100", "score_differential", "qtr",
         "half_seconds_remaining", "pass_attempt", "sack", "qb_spike", "receiver_player_id",
@@ -151,7 +153,7 @@ for team, tp in passes.groupby("posteam"):
                        "proe": proe.get(team, 0.0), "players": players[:12]}
 
 
-def predict(team, yardline_100, down, score_diff, half_secs, out_ids=()):
+def predict(team, yardline_100, down, score_diff, half_secs, out_ids=(), today=None, team_tgt_today=0):
     """Expected targets and P(at least one catch) on the rest of this drive, per player."""
     key = f"{field_bucket(np.array([yardline_100]))[0]}|{down_bucket(np.array([down]))[0]}|" \
           f"{score_bucket(np.array([score_diff]))[0]}|{time_bucket(np.array([half_secs]))[0]}"
@@ -160,8 +162,11 @@ def predict(team, yardline_100, down, score_diff, half_secs, out_ids=()):
               "2min": half_secs <= 120, "lead": score_diff >= 9}
     ps = [p for p in teams_out[team]["players"] if p["id"] not in out_ids]
     raw = []
+    today = today or {}
     for p in ps:
         s = p["share"]
+        if team_tgt_today > 0:  # live update: blend pregame share with this game's target share
+            s = (K_LIVE * s + today.get(p["id"], (0, 0))[0]) / (K_LIVE + team_tgt_today)
         for c, on in active.items():
             if on:
                 s *= p["ctx"][c]
@@ -170,8 +175,10 @@ def predict(team, yardline_100, down, score_diff, half_secs, out_ids=()):
     out = []
     for p, s in zip(ps, raw):
         lam = s / tot * rem * CAL
+        t_tgt, t_rec = today.get(p["id"], (0, 0))
+        cr = (KC_LIVE * p["catch"] + t_rec) / (KC_LIVE + t_tgt)
         out.append({"id": p["id"], "name": p["name"], "xt": lam, "p_target": 1 - math.exp(-lam),
-                    "p_catch": 1 - math.exp(-lam * p["catch"])})
+                    "p_catch": 1 - math.exp(-lam * cr)})
     return sorted(out, key=lambda r: -r["p_catch"]), rem
 
 
@@ -183,14 +190,24 @@ if HOLDOUT:
     league_rate = 1 - math.exp(-league_rem_mean)
     rows, base_rows, top_hits, n_drives = [], [], 0, 0
     calib = []
+    so_far = {}  # (game, team) -> {player: [targets, receptions]} before the current drive
+    static_rows = []
     for (gid, dr), d in test.groupby(["game_id", "fixed_drive"]):
         team = d.posteam.iloc[0]
         if team not in teams_out:
             continue
         first = d.iloc[0]
+        g = so_far.setdefault((gid, team), {})
+        today = {k: tuple(v) for k, v in g.items()}
         preds, rem = predict(team, first.yardline_100, first.down, first.score_differential,
-                             first.half_seconds_remaining)
+                             first.half_seconds_remaining, today=today, team_tgt_today=sum(v[0] for v in g.values()))
+        static, _ = predict(team, first.yardline_100, first.down, first.score_differential,
+                            first.half_seconds_remaining)
         caught = set(d.loc[d.complete_pass == 1, "receiver_player_id"])
+        for r in static:
+            static_rows.append((r["p_catch"] - (1 if r["id"] in caught else 0)) ** 2)
+        for _, pl in d[d.receiver_player_id.notna()].iterrows():
+            v = g.setdefault(pl.receiver_player_id, [0, 0]); v[0] += 1; v[1] += int(pl.complete_pass == 1)
         n_drives += 1
         # naive baseline: season share only, league-average drive volume, no situation
         for p in teams_out[team]["players"]:
@@ -209,19 +226,19 @@ if HOLDOUT:
     has_catch = (test.groupby(["game_id", "fixed_drive"]).complete_pass.sum() > 0).mean()
     bt = {
         "holdout_week": HOLDOUT, "drives": n_drives,
-        "brier_model": round(float(np.mean(rows)), 4), "brier_baseline": round(float(np.mean(base_rows)), 4),
+        "brier_model": round(float(np.mean(rows)), 4), "brier_no_live": round(float(np.mean(static_rows)), 5), "brier_baseline": round(float(np.mean(base_rows)), 4),
         "top_pick_caught_rate": round(top_hits / n_drives, 3),
         "drives_with_any_catch": round(float(has_catch), 3),
         "calibration": [{"bin": str(i), "pred": round(float(r.pred), 3), "actual": round(float(r.actual), 3),
                          "n": int(r.n)} for i, r in cal_tbl.iterrows()],
     }
-    bt["raw"] = {"model_sq": rows, "base_sq": base_rows, "calib": calib, "top_hits": top_hits}
+    bt["raw"] = {"static_sq": static_rows, "model_sq": rows, "base_sq": base_rows, "calib": calib, "top_hits": top_hits}
     json.dump(bt, open(f"{OUT_DIR}/backtest_w{HOLDOUT}.json", "w"))
     print({k: v for k, v in bt.items() if k not in ("raw", "calibration")})
 else:
     model = {
         "built": str(date.today()), "season": SEASON, "through_week": int(cur.week.max()),
-        "league_rem_mean": round(float(league_rem_mean), 3), "decay": DECAY, "cal": CAL,
+        "league_rem_mean": round(float(league_rem_mean), 3), "decay": DECAY, "cal": CAL, "k_live": K_LIVE if K_LIVE < 1e8 else None, "kc_live": KC_LIVE if KC_LIVE < 1e8 else None,
         "volume": volume_table, "teams": teams_out,
     }
     json.dump(model, open(f"{OUT_DIR}/model.json", "w"), separators=(",", ":"))

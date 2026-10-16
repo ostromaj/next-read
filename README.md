@@ -22,7 +22,7 @@ for y in 2024 2025 2026; do
 done
 curl -L -o data/rosters_2026.csv https://github.com/nflverse/nflverse-data/releases/download/weekly_rosters/roster_weekly_2026.csv
 pip install pandas numpy
-DECAY=0.85 K_CTX=40 A_SHARE=15 CAL=0.8 python3 model/build_model.py data data out
+DECAY=0.85 K_CTX=40 A_SHARE=15 CAL=0.8 K_LIVE=25 KC_LIVE=10 python3 model/build_model.py data data out
 python3 app/build_page.py
 ```
 
