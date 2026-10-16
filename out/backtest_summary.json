@@ -1,0 +1,45 @@
+{
+ "tuned_on": [
+  3,
+  4
+ ],
+ "test_week": 5,
+ "week5_brier_model": 0.1259,
+ "week5_brier_naive": 0.1272,
+ "week5_top_pick_caught": 0.249,
+ "week5_drives": 329,
+ "all_drives": 1000,
+ "all_top_pick_caught": 0.291,
+ "calibration_w3_5": [
+  {
+   "bin": "(0.0, 0.1]",
+   "pred": 0.068,
+   "actual": 0.07,
+   "n": 3121
+  },
+  {
+   "bin": "(0.1, 0.2]",
+   "pred": 0.144,
+   "actual": 0.159,
+   "n": 3154
+  },
+  {
+   "bin": "(0.2, 0.3]",
+   "pred": 0.246,
+   "actual": 0.253,
+   "n": 1910
+  },
+  {
+   "bin": "(0.3, 0.4]",
+   "pred": 0.335,
+   "actual": 0.318,
+   "n": 710
+  },
+  {
+   "bin": "(0.4, 1.0]",
+   "pred": 0.445,
+   "actual": 0.419,
+   "n": 203
+  }
+ ]
+}

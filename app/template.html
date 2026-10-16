@@ -1,0 +1,359 @@
+<title>Next Read</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Live NFL games: tap a game to see which receiver is most likely to catch a ball on the current drive.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: game list first; tapping a game opens a broadcast-style chyron (score, down, ball spot) over the receiver board. */
+:root {
+  --ink: #12161d; --paper: #f3f4f1; --panel: #ffffff; --line: #d9dcd6; --muted: #5d6470;
+  --yellow: #b98a00; --yellow-fill: #f2c230; --turf: #2f6b47; --turf-dark: #23543a; --hash: rgba(255,255,255,.55);
+  --bar-track: #e7e9e4; --bar: #2b3340; --bad: #b23a2e; --live: #c8372b; --flash: rgba(242,194,48,.35);
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ink: #e9ecef; --paper: #0e1218; --panel: #161b23; --line: #29303b; --muted: #9aa3b0;
+  --yellow: #f2c230; --yellow-fill: #f2c230; --turf: #24563a; --turf-dark: #1b442d; --hash: rgba(255,255,255,.45);
+  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --ink: #e9ecef; --paper: #0e1218; --panel: #161b23; --line: #29303b; --muted: #9aa3b0;
+  --yellow: #f2c230; --yellow-fill: #f2c230; --turf: #24563a; --turf-dark: #1b442d; --hash: rgba(255,255,255,.45);
+  --bar-track: #222934; --bar: #c9d0da; --bad: #ef7a6c; --live: #ff6b5e; --flash: rgba(242,194,48,.22); color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.brand { font-family: var(--display); font-weight: 800; font-size: 30px; text-transform: uppercase; line-height: 1; letter-spacing: .01em; }
+.brand span { color: var(--yellow); }
+.meta { color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--display); font-weight: 700; font-size: 13px;
+  letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.pill.live { color: var(--live); border-color: currentColor; }
+.pill.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.banner { background: var(--panel); border: 1px dashed var(--yellow); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+
+/* Game list */
+.group h2 { font-family: var(--display); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+.games { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.gcard { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; width: 100%; }
+.gcard:hover { border-color: var(--yellow); }
+.gcard.is-live { box-shadow: inset 3px 0 0 var(--live); }
+.trow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.trow b { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+.trow .sc { font-family: var(--display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.trow .ball { color: var(--yellow); font-size: 12px; margin-left: 6px; }
+.gfoot { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
+.gfoot .st { font-family: var(--display); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.gcard.is-live .gfoot .st { color: var(--live); }
+.empty { color: var(--muted); padding: 24px 0; }
+
+/* Game view */
+.back { background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; font-family: var(--display);
+  font-weight: 600; letter-spacing: .05em; text-transform: uppercase; font-size: 14px; }
+.grid { display: grid; gap: 18px; grid-template-columns: 1fr; margin-top: 14px; }
+@media (min-width: 900px) { .grid { grid-template-columns: 400px 1fr; align-items: start; } }
+.grid > * { min-width: 0; }
+.chyron { background: var(--turf); color: #fff; border-radius: 10px; overflow: hidden; }
+.score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 12px 14px; background: var(--turf-dark); }
+.score .tm { font-family: var(--display); font-weight: 800; font-size: 26px; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+.score .tm.h { justify-content: flex-end; }
+.score .tm .n { font-variant-numeric: tabular-nums; }
+.score .tm .poss { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow-fill); }
+.score .clk { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: .05em; text-align: center; opacity: .9; text-transform: uppercase; }
+.dd { padding: 14px 14px 4px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dd-big { font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1; }
+.dd-big em { font-style: normal; color: var(--yellow-fill); }
+.dd-side { font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: .04em; text-transform: uppercase; opacity: .9; }
+.field { position: relative; margin: 10px 14px 6px; height: 54px; border-radius: 6px; overflow: hidden;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 10%, transparent 10% 20%); border: 1px solid rgba(255,255,255,.3); }
+.field .ez { position: absolute; top: 0; bottom: 0; width: 6%; background: rgba(0,0,0,.25); }
+.field .ez.l { left: 0; } .field .ez.r { right: 0; }
+.field .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--hash); }
+.field .yd { position: absolute; bottom: 4px; transform: translateX(-50%); font-family: var(--display); font-size: 11px; font-weight: 600; opacity: .75; }
+.field .los { position: absolute; top: 0; bottom: 0; width: 3px; background: #6fb2ff; transform: translateX(-50%); transition: left .4s ease; }
+.field .fd { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--yellow-fill); transform: translateX(-50%); transition: left .4s ease; }
+.field-cap { display: flex; justify-content: space-between; margin: 0 14px 4px; font-size: 12px; opacity: .8; }
+.last { margin: 8px 14px 14px; padding: 8px 10px; background: rgba(0,0,0,.18); border-radius: 6px; font-size: 13px; }
+.last .lbl { font-family: var(--display); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; opacity: .8; display: block; }
+.outs { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+.outs h3 { margin: 0 0 4px; font-family: var(--display); font-size: 15px; letter-spacing: .08em; text-transform: uppercase; }
+.outs p { margin: 0; color: var(--muted); }
+
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.board + .board { margin-top: 18px; }
+.board-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.board-head h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 23px; text-transform: uppercase; letter-spacing: .02em; text-wrap: balance; }
+.board-head .sub2 { color: var(--muted); font-size: 13px; }
+.xt { text-align: right; flex: none; }
+.xt strong { display: block; font-family: var(--display); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.xt span { color: var(--muted); font-size: 12px; }
+.cols, .pl { display: grid; grid-template-columns: 1fr 60px 64px 58px; gap: 10px; align-items: center; }
+.cols { padding: 8px 16px; color: var(--muted); font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.cols span:not(:first-child) { text-align: right; }
+ol.players { list-style: none; margin: 0; padding: 0; }
+.pl { padding: 10px 16px; border-top: 1px solid var(--line); transition: background-color .8s ease; }
+.pl.top { background: color-mix(in srgb, var(--yellow-fill) 12%, transparent); }
+.pl.flash { background: var(--flash); transition: none; }
+.who { min-width: 0; }
+.who .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who .sub { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.flag { color: var(--bad); }
+.barline { margin-top: 5px; height: 6px; background: var(--bar-track); border-radius: 3px; overflow: hidden; }
+.barline i { display: block; height: 100%; background: var(--bar); border-radius: 3px; transition: width .4s ease; }
+.pl.top .barline i { background: var(--yellow); }
+.r { text-align: right; font-variant-numeric: tabular-nums; }
+.pc { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1; }
+.pt { color: var(--muted); font-size: 13px; }
+.today { font-family: var(--display); font-weight: 600; font-size: 15px; }
+.board-foot { padding: 12px 16px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+.record { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 12px; }
+@media (min-width: 640px) { .record { grid-template-columns: 240px 1fr; align-items: center; } }
+.record h3 { margin: 0 0 6px; font-family: var(--display); font-size: 18px; letter-spacing: .04em; text-transform: uppercase; }
+.record p { margin: 0 0 6px; font-size: 14px; max-width: 62ch; }
+.record svg { width: 100%; max-width: 240px; height: auto; display: block; }
+.note { color: var(--muted); font-size: 13px; }
+.fine { margin-top: 18px; color: var(--muted); font-size: 12px; max-width: 75ch; }
+@media (prefers-reduced-motion: reduce) { .barline i, .field .los, .field .fd, .pl { transition: none; } .pill.live::before { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Next <span>Read</span></div>
+    <div class="meta"><span id="dataLine"></span><span class="pill" id="feedPill">Connecting</span></div>
+  </header>
+  <div class="banner" id="exampleBanner" hidden>Example games shown. This preview can't reach the live feed, so these scores are made up. The hosted app shows real games automatically.</div>
+
+  <main id="listView">
+    <div id="gameGroups"></div>
+  </main>
+
+  <main id="gameView" hidden>
+    <button type="button" class="back" id="backBtn">All games</button>
+    <div class="grid">
+      <section aria-label="Game situation">
+        <div class="chyron">
+          <div class="score">
+            <div class="tm" id="awayTm"></div>
+            <div class="clk" id="clk"></div>
+            <div class="tm h" id="homeTm"></div>
+          </div>
+          <div class="dd"><div class="dd-big" id="ddBig"></div><div class="dd-side" id="ddSide"></div></div>
+          <div class="field" id="field"><div class="ez l"></div><div class="ez r"></div><div class="los" id="los"></div><div class="fd" id="fd"></div></div>
+          <div class="field-cap"><span id="capL"></span><span id="capR"></span></div>
+          <div class="last" id="lastPlay"><span class="lbl">Last play</span><span id="lastText"></span></div>
+        </div>
+        <div class="outs" id="outsBox" hidden><h3>Ruled out</h3><p id="outsText"></p></div>
+      </section>
+      <section id="boards"></section>
+    </div>
+  </main>
+
+  <section class="record" aria-label="Track record">
+    <div id="calib"></div>
+    <div>
+      <h3>Track record</h3>
+      <p id="recText"></p>
+      <p class="note">Each dot groups predictions by how confident the model was. Dots on the diagonal mean a "30%" really happened about 30% of the time.</p>
+    </div>
+  </section>
+  <p class="fine">Estimates for entertainment and research, not guarantees. Model built from public NFL play-by-play (nflverse); live game data from ESPN. For adults only. If gambling stops being fun, call or text 1-800-GAMBLER.</p>
+</div>
+
+<script>
+const MODEL = /*MODEL*/null;
+const BACKTEST = /*BACKTEST*/null;
+const TEAMS = {ARI:"Cardinals",ATL:"Falcons",BAL:"Ravens",BUF:"Bills",CAR:"Panthers",CHI:"Bears",CIN:"Bengals",CLE:"Browns",DAL:"Cowboys",
+DEN:"Broncos",DET:"Lions",GB:"Packers",HOU:"Texans",IND:"Colts",JAX:"Jaguars",KC:"Chiefs",LA:"Rams",LAC:"Chargers",LV:"Raiders",MIA:"Dolphins",
+MIN:"Vikings",NE:"Patriots",NO:"Saints",NYG:"Giants",NYJ:"Jets",PHI:"Eagles",PIT:"Steelers",SEA:"Seahawks",SF:"49ers",TB:"Buccaneers",TEN:"Titans",WAS:"Commanders"};
+const POLL_MS = 4000;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = x => Math.round(x * 100) + "%";
+
+let games = [], detail = {}, current = null, example = false, lastOk = 0, prevPc = {};
+
+// ---------- model (mirrors build_model.py predict) ----------
+const fb = y => y > 80 ? "own0-20" : y > 60 ? "own20-40" : y > 40 ? "mid" : y > 20 ? "opp20-40" : "redzone";
+const db = d => d === 1 ? "1" : d === 2 ? "2" : "3+";
+const sb = s => s <= -9 ? "trail9" : s < 0 ? "trail" : s === 0 ? "tied" : s <= 8 ? "lead" : "lead9";
+function predict(team, y, down, score, twoMin, outEspn) {
+  const t = MODEL.teams[team]; if (!t) return null;
+  const rem = (MODEL.volume[`${fb(y)}|${db(down)}|${sb(score)}|${twoMin ? "2min" : "normal"}`] ?? MODEL.league_rem_mean) * t.mult * (MODEL.cal || 1);
+  const act = { rz: y <= 20, "3d": down >= 3, trail: score <= -9, "2min": twoMin, lead: score >= 9 };
+  const live = t.players.filter(p => !(p.espn && outEspn.has(p.espn)));
+  let tot = 0; const raw = live.map(p => { let s = p.share; for (const c in act) if (act[c]) s *= p.ctx[c]; tot += s; return s; });
+  const rows = live.map((p, i) => { const lam = raw[i] / (tot || 1) * rem; return { p, xt: lam, pt: 1 - Math.exp(-lam), pc: 1 - Math.exp(-lam * p.catch) }; });
+  rows.sort((a, b) => b.pc - a.pc);
+  return { rows, rem, out: t.players.filter(p => p.espn && outEspn.has(p.espn)) };
+}
+
+// ---------- data feed ----------
+async function getJSON(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function poll() {
+  try {
+    const j = await getJSON("api/games");
+    games = j.games || []; example = false; lastOk = Date.now();
+    const hm = /^#g(\w+)$/.exec(location.hash); current = hm ? hm[1] : null;
+    if (current) { try { detail[current] = await getJSON("api/game/" + encodeURIComponent(current)); } catch (e) {} }
+  } catch (e) {
+    if (!lastOk) { games = EXAMPLE_GAMES; example = true; }
+  }
+  $("exampleBanner").hidden = !example;
+  renderPill(); route();
+}
+function renderPill() {
+  const p = $("feedPill"), anyLive = games.some(g => g.state === "in");
+  if (example) { p.className = "pill"; p.textContent = "Preview"; return; }
+  if (!lastOk) { p.className = "pill"; p.textContent = "Connecting"; return; }
+  p.className = "pill" + (anyLive ? " live" : ""); p.textContent = anyLive ? "Live" : "Up to date";
+}
+
+// ---------- views ----------
+function route() {
+  const m = /^#g(\w+)$/.exec(location.hash);
+  current = m ? m[1] : null;
+  const g = current && games.find(x => x.id === current);
+  $("listView").hidden = !!g; $("gameView").hidden = !g;
+  if (g) renderGame(g); else renderList();
+}
+function kickoff(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+function statusText(g) {
+  if (g.state === "in") return g.period > 4 ? `OT ${g.clock}` : `Q${g.period} ${g.clock}`;
+  if (g.state === "post") return "Final";
+  return kickoff(g.date);
+}
+function renderList() {
+  const groups = [["Live now", games.filter(g => g.state === "in")], ["Coming up", games.filter(g => g.state === "pre")], ["Final", games.filter(g => g.state === "post")]];
+  const box = $("gameGroups"); box.textContent = "";
+  if (!games.length) { box.innerHTML = `<p class="empty">No games on the schedule right now. This week's games show up here automatically.</p>`; return; }
+  for (const [title, list] of groups) {
+    if (!list.length) continue;
+    const sec = document.createElement("section"); sec.className = "group";
+    sec.innerHTML = `<h2>${title}</h2><div class="games"></div>`;
+    const grid = sec.querySelector(".games");
+    list.forEach(g => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "gcard" + (g.state === "in" ? " is-live" : "");
+      const row = (t, s) => `<div class="trow"><b>${esc(t)} ${esc(TEAMS[t] || "")}${g.state === "in" && g.posteam === t ? '<span class="ball" aria-label="has the ball">●</span>' : ""}</b>${g.state === "pre" ? "" : `<span class="sc">${s}</span>`}</div>`;
+      b.innerHTML = row(g.away, g.awayScore) + row(g.home, g.homeScore) +
+        `<div class="gfoot"><span class="st">${esc(statusText(g))}</span><span>${g.state === "in" ? esc(g.text || "") : g.state === "pre" ? "Opening-drive outlook" : ""}</span></div>`;
+      b.addEventListener("click", () => { location.hash = "g" + g.id; });
+      grid.appendChild(b);
+    });
+    box.appendChild(sec);
+  }
+}
+
+function boardHTML(team, title, sub, res, today, flashOn) {
+  if (!res) return `<div class="board"><div class="board-head"><h2>${esc(title)}</h2></div><p class="board-foot">No model data for ${esc(team)} yet.</p></div>`;
+  const maxPc = Math.max(...res.rows.map(r => r.pc), 0.01);
+  const rows = res.rows.map((r, i) => {
+    const key = team + ":" + r.p.id, was = prevPc[key], changed = flashOn && was != null && Math.abs(was - r.pc) >= 0.04;
+    prevPc[key] = r.pc;
+    const s = today[r.p.espn];
+    const flag = r.p.games_since > 0 ? `<span class="flag">missed last ${r.p.games_since === 1 ? "game" : r.p.games_since + " games"}</span>` : "";
+    return `<li class="pl${i === 0 ? " top" : ""}${changed ? " flash" : ""}"><div class="who"><div class="nm">${esc(r.p.name)}</div>
+      <div class="sub"><span>${esc(r.p.pos)}</span><span>Season ${r.p.rec} rec</span>${flag}</div>
+      <div class="barline"><i style="width:${(r.pc / maxPc * 100).toFixed(1)}%"></i></div></div>
+      <div class="r today">${s ? `${s.rec}/${s.tgt ?? "–"}` : "–"}</div><div class="r pc">${pct(r.pc)}</div><div class="r pt">${pct(r.pt)}</div></li>`;
+  }).join("");
+  return `<div class="board"><div class="board-head"><div><h2>${esc(title)}</h2><div class="sub2">${esc(sub)}</div></div>
+    <div class="xt"><strong>${res.rem.toFixed(1)}</strong><span>targets expected<br>rest of drive</span></div></div>
+    <div class="cols"><span>Receiver</span><span title="Catches / targets this game">Today</span><span>Catch</span><span>Target</span></div>
+    <ol class="players">${rows}</ol></div>`;
+}
+
+function renderGame(g) {
+  const d = detail[g.id] || {}, outSet = new Set(d.out || []), today = d.receiving || {};
+  const poss = g.state === "in" ? g.posteam : null;
+  const tm = (t, s, side) => `${side === "h" ? `<span class="n">${s}</span>` : ""}${poss === t ? '<span class="poss" aria-label="has the ball"></span>' : ""}<span>${esc(t)}</span>${side === "a" ? `<span class="n">${s}</span>` : ""}`;
+  $("awayTm").innerHTML = g.state === "pre" ? esc(g.away) : tm(g.away, g.awayScore, "a");
+  $("homeTm").innerHTML = g.state === "pre" ? esc(g.home) : tm(g.home, g.homeScore, "h");
+  $("clk").textContent = statusText(g);
+
+  const live = g.state === "in" && poss && g.down;
+  const y = live ? (g.yardline_100 ?? 75) : 75;
+  const spot = 100 - y;
+  if (live) {
+    const goal = g.distance >= y;
+    $("ddBig").innerHTML = `${["", "1st", "2nd", "3rd", "4th"][g.down]} &amp; <em>${goal ? "Goal" : g.distance}</em>`;
+    $("ddSide").textContent = `${poss} ball · ${y === 50 ? "midfield" : y > 50 ? "own " + (100 - y) : "opp " + y}`;
+    $("fd").hidden = goal; $("fd").style.left = Math.min(100, spot + g.distance) + "%";
+  } else {
+    $("ddBig").innerHTML = g.state === "pre" ? "Kickoff" : g.state === "post" ? "Final" : "Between plays";
+    $("ddSide").textContent = g.state === "pre" ? kickoff(g.date) : g.text || "";
+    $("fd").hidden = true;
+  }
+  $("los").hidden = !live; $("los").style.left = spot + "%";
+  $("capL").textContent = live ? `${poss} goal` : ""; $("capR").textContent = live ? "Opponent goal" : "";
+  $("lastPlay").hidden = !(g.lastPlay); $("lastText").textContent = g.lastPlay || "";
+
+  let html = "";
+  if (live) {
+    const res = predict(poss, y, g.down, g.scoreDiff || 0, g.halfSeconds != null && g.halfSeconds <= 120, outSet);
+    html += boardHTML(poss, `${TEAMS[poss] || poss} have the ball`, "Chance of at least one catch before this drive ends", res, today, true);
+    const other = poss === g.home ? g.away : g.home;
+    const res2 = predict(other, 75, 1, -(g.scoreDiff || 0), false, outSet);
+    html += boardHTML(other, `${TEAMS[other] || other} next drive`, "If they start at their own 25", res2, today, false);
+  } else {
+    for (const t of [g.away, g.home]) {
+      const diff = g.state === "pre" ? 0 : (t === g.home ? g.homeScore - g.awayScore : g.awayScore - g.homeScore);
+      html += boardHTML(t, `${TEAMS[t] || t} ${g.state === "pre" ? "opening drive" : "next drive"}`, "Starting at their own 25", predict(t, 75, 1, g.state === "pre" ? 0 : diff, false, outSet), today, false);
+    }
+  }
+  $("boards").innerHTML = html;
+  const outs = [g.away, g.home].flatMap(t => (MODEL.teams[t]?.players || []).filter(p => p.espn && outSet.has(p.espn)).map(p => `${p.name} (${t})`));
+  $("outsBox").hidden = !outs.length; $("outsText").textContent = outs.join(", ") + ". Their targets are spread to teammates.";
+}
+
+// ---------- track record ----------
+function drawCalib() {
+  const pts = BACKTEST.calibration_w3_5, W = 240, H = 210, L = 34, B = 30, R = 10, T = 10, max = 0.5;
+  const x = v => L + v / max * (W - L - R), y = v => H - B - v / max * (H - B - T), nMax = Math.max(...pts.map(p => p.n));
+  let g = "";
+  [0, .1, .2, .3, .4, .5].forEach(v => {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${v * 100}%</text><text x="${x(v)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="var(--muted)">${v * 100}%</text>`;
+  });
+  g += `<line x1="${x(0)}" y1="${y(0)}" x2="${x(max)}" y2="${y(max)}" stroke="var(--muted)" stroke-dasharray="4 4" stroke-width="1"/>`;
+  pts.forEach(p => { g += `<circle cx="${x(p.pred)}" cy="${y(p.actual)}" r="${3 + 6 * Math.sqrt(p.n / nMax)}" fill="var(--yellow)" fill-opacity=".85"><title>Predicted ${pct(p.pred)}, happened ${pct(p.actual)}</title></circle>`; });
+  g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="10" fill="var(--muted)">Predicted chance of a catch</text>`;
+  $("calib").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Predicted vs actual catch rate">${g}</svg>`;
+  const b = BACKTEST, imp = ((1 - b.week5_brier_model / b.week5_brier_naive) * 100).toFixed(1);
+  $("recText").textContent = `Tested on ${b.all_drives.toLocaleString()} real drives from Weeks 3–5, each predicted using only earlier games. The top pick caught a pass on ${pct(b.all_top_pick_caught)} of drives. On the untouched Week 5 test it beat a plain "season target share" guess by ${imp}%.`;
+}
+
+// Example data, used only when the live feed can't be reached (e.g. inside a preview)
+const EXAMPLE_GAMES = [
+  { id: "ex1", state: "in", date: new Date().toISOString(), away: "BUF", home: "KC", awayScore: 17, homeScore: 13, period: 3, clock: "6:42",
+    posteam: "KC", down: 2, distance: 6, yardline_100: 38, scoreDiff: -4, halfSeconds: 402, text: "2nd & 6 at BUF 38", lastPlay: "Example play: short pass right for 4 yards." },
+  { id: "ex2", state: "in", date: new Date().toISOString(), away: "DAL", home: "PHI", awayScore: 7, homeScore: 21, period: 2, clock: "1:12",
+    posteam: "DAL", down: 1, distance: 10, yardline_100: 64, scoreDiff: -14, halfSeconds: 72, text: "1st & 10 at DAL 36", lastPlay: "Example play: kickoff returned to the 36." },
+  { id: "ex3", state: "pre", date: new Date(Date.now() + 5 * 3600e3).toISOString(), away: "SF", home: "SEA", awayScore: 0, homeScore: 0 },
+];
+
+function setup() {
+  $("dataLine").textContent = `Model: ${MODEL.season} through Week ${MODEL.through_week}`;
+  const field = $("field");
+  for (let yd = 10; yd <= 90; yd += 10) {
+    const t = document.createElement("div"); t.className = "tick"; t.style.left = yd + "%"; field.insertBefore(t, $("los"));
+    const n = document.createElement("div"); n.className = "yd"; n.style.left = yd + "%"; n.textContent = yd <= 50 ? yd : 100 - yd; field.insertBefore(n, $("los"));
+  }
+  $("backBtn").addEventListener("click", () => { location.hash = ""; });
+  window.addEventListener("hashchange", () => { prevPc = {}; poll(); });
+  drawCalib();
+  poll();
+  setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
+}
+setup();
+</script>
