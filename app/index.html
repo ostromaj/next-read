@@ -118,6 +118,25 @@ ol.players { list-style: none; margin: 0; padding: 0; }
 .pc { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1; }
 .pt { color: var(--muted); font-size: 13px; }
 .today { font-family: var(--display); font-weight: 600; font-size: 15px; }
+.lock { display: inline-block; font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--yellow); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; margin-bottom: 6px; }
+.mark .yes { color: var(--good); font-family: var(--display); font-weight: 800; font-size: 20px; }
+.mark .tgt { color: var(--muted); font-size: 12px; }
+.log { margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.log-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.log-head h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 23px; text-transform: uppercase; letter-spacing: .02em; }
+.tally { color: var(--muted); font-size: 13px; }
+.tally b { color: var(--ink); font-family: var(--display); font-size: 18px; }
+ol.drives { list-style: none; margin: 0; padding: 0; }
+.dv { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); }
+.dv:first-child { border-top: 0; }
+.dv .when { font-family: var(--display); font-weight: 600; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dv .what { min-width: 0; }
+.dv .what b { font-family: var(--display); font-size: 17px; letter-spacing: .02em; }
+.dv .what span { display: block; color: var(--muted); font-size: 12px; }
+.dv .pick { text-align: right; font-size: 13px; white-space: nowrap; }
+.hit { color: var(--good); font-weight: 700; }
+.miss { color: var(--muted); font-weight: 700; }
 .board-foot { padding: 12px 16px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 
 .record { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 12px; }
@@ -185,29 +204,73 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const pct = x => Math.round(x * 100) + "%";
 
-let games = [], detail = {}, current = null, example = false, lastOk = 0, prevPc = {};
+let games = [], detail = {}, current = null, example = false, lastOk = 0;
 
 // ---------- model (mirrors build_model.py predict) ----------
 const fb = y => y > 80 ? "own0-20" : y > 60 ? "own20-40" : y > 40 ? "mid" : y > 20 ? "opp20-40" : "redzone";
 const db = d => d === 1 ? "1" : d === 2 ? "2" : "3+";
 const sb = s => s <= -9 ? "trail9" : s < 0 ? "trail" : s === 0 ? "tied" : s <= 8 ? "lead" : "lead9";
-// Live update: this game's targets and catches pull each player's share and catch rate toward what's
-// happening today. K_LIVE / KC_LIVE (fit in the backtest) = how many in-game targets the pregame numbers are worth.
+// Live update: targets and catches from this team's earlier drives pull each player's share and catch rate toward
+// what's happening today. K_LIVE / KC_LIVE (fit in the backtest) = how many in-game targets the pregame numbers are worth.
+// today = { modelPlayerId: { tgt, rec } }, teamTgt = all of the team's targets so far (including unlisted players).
 function predict(team, y, down, score, twoMin, outEspn, today, teamTgt) {
   const K = MODEL.k_live, KC = MODEL.kc_live, useLive = !!(today && teamTgt > 0 && K);
   const t = MODEL.teams[team]; if (!t) return null;
   const rem = (MODEL.volume[`${fb(y)}|${db(down)}|${sb(score)}|${twoMin ? "2min" : "normal"}`] ?? MODEL.league_rem_mean) * t.mult * (MODEL.cal || 1);
   const act = { rz: y <= 20, "3d": down >= 3, trail: score <= -9, "2min": twoMin, lead: score >= 9 };
   const live = t.players.filter(p => !(p.espn && outEspn.has(p.espn)));
-  const td = p => (today && p.espn && today[p.espn]) || null;
-  let tot = 0; const raw = live.map(p => { let s = p.share; const t = td(p); if (useLive) s = (K * s + (t && t.tgt != null ? t.tgt : 0)) / (K + teamTgt); for (const c in act) if (act[c]) s *= p.ctx[c]; tot += s; return s; });
+  const td = p => (today && today[p.id]) || null;
+  let tot = 0; const raw = live.map(p => { let s = p.share; const u = td(p); if (useLive) s = (K * s + (u ? u.tgt : 0)) / (K + teamTgt); for (const c in act) if (act[c]) s *= p.ctx[c]; tot += s; return s; });
   const rows = live.map((p, i) => {
-    const lam = raw[i] / (tot || 1) * rem, t = td(p);
-    const cr = useLive && KC && t && t.tgt != null ? (KC * p.catch + t.rec) / (KC + t.tgt) : p.catch;
+    const lam = raw[i] / (tot || 1) * rem, u = td(p);
+    const cr = useLive && KC && u ? (KC * p.catch + u.rec) / (KC + u.tgt) : p.catch;
     return { p, xt: lam, pt: 1 - Math.exp(-lam), pc: 1 - Math.exp(-lam * cr) };
   });
   rows.sort((a, b) => b.pc - a.pc);
-  return { rows, rem, out: t.players.filter(p => p.espn && outEspn.has(p.espn)) };
+  return { rows, rem };
+}
+
+// ESPN play text names receivers like "T.Kelce" or "A.St. Brown": match to the model's roster for that team
+const norm = x => String(x || "").toLowerCase().normalize("NFD").replace(/[^a-z]/g, "");
+const noSuffix = x => String(x || "").replace(/\b(Jr|Sr|II|III|IV|V)\b\.?/g, "");
+const matchCache = {};
+function matchPlayer(team, raw) {
+  const key = team + "|" + raw;
+  if (key in matchCache) return matchCache[key];
+  const m = /^([^.\s]+)\.\s?(.+)$/.exec(raw || "");
+  let hit = null;
+  if (m) {
+    const ini = norm(m[1]), last = norm(noSuffix(m[2]));
+    hit = (MODEL.teams[team]?.players || []).filter(p => {
+      const parts = p.name.split(" "), fn = norm(parts[0]), ln = norm(noSuffix(parts.slice(1).join(" ")));
+      return ini && last && ln && fn.startsWith(ini) && (ln.startsWith(last) || last.startsWith(ln));
+    }).sort((a, b) => b.share - a.share)[0] || null;
+  }
+  return (matchCache[key] = hit);
+}
+
+// Walk the game's drives in order. Each drive's pick is locked from what was known before its first snap.
+function analyzeDrives(g, d, outSet) {
+  const sofar = {}, list = [];
+  for (const dr of d.drives || []) {
+    const T = dr.team; if (!MODEL.teams[T]) continue;
+    const st = sofar[T] || (sofar[T] = { byId: {}, total: 0 });
+    const snap = {}; for (const k in st.byId) snap[k] = { ...st.byId[k] };
+    const diff = T === g.home ? dr.home0 - dr.away0 : dr.away0 - dr.home0;
+    const res = predict(T, dr.y100 ?? 75, 1, diff, dr.halfSeconds != null && dr.halfSeconds <= 120, outSet, snap, st.total);
+    const caught = {}, targeted = {}, names = [];
+    for (const t of dr.targets || []) {
+      st.total++;
+      const p = matchPlayer(T, t.name);
+      if (t.caught) names.push(p ? p.name.split(" ").slice(-1)[0] : t.name);
+      if (!p) continue;
+      const v = st.byId[p.id] || (st.byId[p.id] = { tgt: 0, rec: 0 });
+      v.tgt++; targeted[p.id] = (targeted[p.id] || 0) + 1;
+      if (t.caught) { v.rec++; caught[p.id] = (caught[p.id] || 0) + 1; }
+    }
+    list.push({ dr, res, caught, targeted, names });
+  }
+  return { list, sofar };
 }
 
 // ---------- data feed ----------
@@ -219,7 +282,7 @@ async function poll() {
     const hm = /^#g(\w+)$/.exec(location.hash); current = hm ? hm[1] : null;
     if (current) { try { detail[current] = await getJSON("api/game/" + encodeURIComponent(current)); } catch (e) {} }
   } catch (e) {
-    if (!lastOk) { games = EXAMPLE_GAMES; example = true; }
+    if (!lastOk) { games = EXAMPLE_GAMES; example = true; Object.assign(detail, EXAMPLE_DETAIL); }
   }
   $("exampleBanner").hidden = !example;
   renderPill(); route();
@@ -269,31 +332,46 @@ function renderList() {
   }
 }
 
-function boardHTML(team, title, sub, res, today, flashOn, base) {
-  const baseBy = {}; (base ? base.rows : []).forEach(r => { baseBy[r.p.id] = r.pc; });
+function boardHTML(team, title, sub, res, opts) {
   if (!res) return `<div class="board"><div class="board-head"><h2>${esc(title)}</h2></div><p class="board-foot">No model data for ${esc(team)} yet.</p></div>`;
   const maxPc = Math.max(...res.rows.map(r => r.pc), 0.01);
   const rows = res.rows.map((r, i) => {
-    const key = team + ":" + r.p.id, was = prevPc[key], changed = flashOn && was != null && Math.abs(was - r.pc) >= 0.04;
-    prevPc[key] = r.pc;
-    const s = today[r.p.espn];
-    const b0 = baseBy[r.p.id], dlt = b0 != null ? Math.round((r.pc - b0) * 100) : 0;
-    const move = Math.abs(dlt) >= 2 ? `<span class="${dlt > 0 ? "up" : "dn"}" title="Change from today's usage">${dlt > 0 ? "▲" : "▼"} ${Math.abs(dlt)} pts today</span>` : "";
     const flag = r.p.games_since > 0 ? `<span class="flag">missed last ${r.p.games_since === 1 ? "game" : r.p.games_since + " games"}</span>` : "";
-    return `<li class="pl${i === 0 ? " top" : ""}${changed ? " flash" : ""}"><div class="who"><div class="nm">${esc(r.p.name)}</div>
-      <div class="sub"><span>${esc(r.p.pos)}</span><span>Season ${r.p.rec} rec</span>${move}${flag}</div>
+    const g = opts.today && opts.today[r.p.id];
+    return `<li class="pl${i === 0 ? " top" : ""}${opts.caught && opts.caught[r.p.id] ? " got" : ""}"><div class="who"><div class="nm">${esc(r.p.name)}</div>
+      <div class="sub"><span>${esc(r.p.pos)}</span><span>${g ? `Today ${g.rec}/${g.tgt}` : `Season ${r.p.rec} rec`}</span>${flag}</div>
       <div class="barline"><i style="width:${(r.pc / maxPc * 100).toFixed(1)}%"></i></div></div>
-      <div class="r today">${s ? `${s.rec}/${s.tgt ?? "–"}` : "–"}</div><div class="r pc">${pct(r.pc)}</div><div class="r pt">${pct(r.pt)}</div></li>`;
+      <div class="r mark">${opts.markFn ? opts.markFn(r) : ""}</div><div class="r pc">${pct(r.pc)}</div><div class="r pt">${pct(r.pt)}</div></li>`;
   }).join("");
-  return `<div class="board"><div class="board-head"><div><h2>${esc(title)}</h2><div class="sub2">${esc(sub)}</div></div>
-    <div class="xt"><strong>${res.rem.toFixed(1)}</strong><span>targets expected<br>rest of drive</span></div></div>
-    <div class="cols"><span>Receiver</span><span title="Catches / targets this game">Today</span><span>Catch</span><span>Target</span></div>
+  return `<div class="board${opts.locked ? " locked" : ""}"><div class="board-head"><div>${opts.locked ? '<span class="lock">Locked at drive start</span>' : ""}<h2>${esc(title)}</h2><div class="sub2">${esc(sub)}</div></div>
+    <div class="xt"><strong>${res.rem.toFixed(1)}</strong><span>targets expected<br>this drive</span></div></div>
+    <div class="cols"><span>Receiver</span><span>${esc(opts.markLabel || "")}</span><span>Catch</span><span>Target</span></div>
     <ol class="players">${rows}</ol></div>`;
 }
 
+const ord = n => ["", "1st", "2nd", "3rd", "4th"][n] || "";
+const qtr = p => p > 4 ? "OT" : "Q" + p;
+function spotText(team, y) { return y == null ? "" : y === 50 ? "midfield" : y > 50 ? `own ${100 - y}` : `opp ${y}`; }
+
+function logHTML(g, list) {
+  const done = list.filter(x => x.dr.done && x.dr.snaps > 0);
+  if (!done.length) return "";
+  const hits = done.filter(x => x.res && x.res.rows[0] && x.caught[x.res.rows[0].p.id]).length;
+  const exp = done.reduce((s, x) => s + (x.res && x.res.rows[0] ? x.res.rows[0].pc : 0), 0);
+  const items = done.slice().reverse().map(x => {
+    const top = x.res && x.res.rows[0], hit = top && x.caught[top.p.id];
+    return `<li class="dv"><span class="when">${qtr(x.dr.period)} ${esc(x.dr.clock)}</span>
+      <span class="what"><b>${esc(x.dr.team)} · ${esc(spotText(x.dr.team, x.dr.y100))}</b><span>${esc(x.dr.result || "Drive over")}${x.names.length ? " · Caught: " + esc([...new Set(x.names)].join(", ")) : " · No catches"}</span></span>
+      <span class="pick">${top ? `${esc(top.p.name.split(" ").slice(-1)[0])} ${pct(top.pc)}<br><span class="${hit ? "hit" : "miss"}">${hit ? "✓ caught one" : "✗ no catch"}</span>` : ""}</span></li>`;
+  }).join("");
+  return `<div class="log"><div class="log-head"><h2>Drive log</h2>
+    <div class="tally"><b>${hits} of ${done.length}</b> top picks caught a pass · expected ${exp.toFixed(1)}</div></div>
+    <ol class="drives">${items}</ol></div>`;
+}
+
 function renderGame(g) {
-  const d = detail[g.id] || {}, outSet = new Set(d.out || []), today = d.receiving || {}, tt = d.teamTargets || {};
-  const P = (t, yy, dn, sc, two) => [predict(t, yy, dn, sc, two, outSet, today, tt[t] || 0), predict(t, yy, dn, sc, two, outSet, null, 0)];
+  const d = detail[g.id] || {}, outSet = new Set(d.out || []);
+  const { list, sofar } = analyzeDrives(g, d, outSet);
   const poss = g.state === "in" ? g.posteam : null;
   const tm = (t, s, side) => `${side === "h" ? `<span class="n">${s}</span>` : ""}${poss === t ? '<span class="poss" aria-label="has the ball"></span>' : ""}<span>${esc(t)}</span>${side === "a" ? `<span class="n">${s}</span>` : ""}`;
   $("awayTm").innerHTML = g.state === "pre" ? esc(g.away) : tm(g.away, g.awayScore, "a");
@@ -301,12 +379,11 @@ function renderGame(g) {
   $("clk").textContent = statusText(g);
 
   const live = g.state === "in" && poss && g.down;
-  const y = live ? (g.yardline_100 ?? 75) : 75;
-  const spot = 100 - y;
+  const y = live ? (g.yardline_100 ?? 75) : 75, spot = 100 - y;
   if (live) {
     const goal = g.distance >= y;
-    $("ddBig").innerHTML = `${["", "1st", "2nd", "3rd", "4th"][g.down]} &amp; <em>${goal ? "Goal" : g.distance}</em>`;
-    $("ddSide").textContent = `${poss} ball · ${y === 50 ? "midfield" : y > 50 ? "own " + (100 - y) : "opp " + y}`;
+    $("ddBig").innerHTML = `${ord(g.down)} &amp; <em>${goal ? "Goal" : g.distance}</em>`;
+    $("ddSide").textContent = `${poss} ball · ${spotText(poss, y)}`;
     $("fd").hidden = goal; $("fd").style.left = Math.min(100, spot + g.distance) + "%";
   } else {
     $("ddBig").innerHTML = g.state === "pre" ? "Kickoff" : g.state === "post" ? "Final" : "Between plays";
@@ -317,20 +394,30 @@ function renderGame(g) {
   $("capL").textContent = live ? `${poss} goal` : ""; $("capR").textContent = live ? "Opponent goal" : "";
   $("lastPlay").hidden = !(g.lastPlay); $("lastText").textContent = g.lastPlay || "";
 
+  const todayOf = t => (sofar[t] ? sofar[t] : { byId: {}, total: 0 });
+  const upNext = (t, label) => {
+    const st = todayOf(t), diff = g.state === "pre" ? 0 : (t === g.home ? g.homeScore - g.awayScore : g.awayScore - g.homeScore);
+    return boardHTML(t, `${TEAMS[t] || t} ${label}`, "Projected from their own 25", predict(t, 75, 1, diff, false, outSet, st.byId, st.total), { today: st.byId });
+  };
   let html = "";
-  if (live) {
-    const [res, base] = P(poss, y, g.down, g.scoreDiff || 0, g.halfSeconds != null && g.halfSeconds <= 120);
-    html += boardHTML(poss, `${TEAMS[poss] || poss} have the ball`, "Chance of at least one catch before this drive ends", res, today, true, base);
-    const other = poss === g.home ? g.away : g.home;
-    const [res2, base2] = P(other, 75, 1, -(g.scoreDiff || 0), false);
-    html += boardHTML(other, `${TEAMS[other] || other} next drive`, "If they start at their own 25", res2, today, false, base2);
-  } else {
-    for (const t of [g.away, g.home]) {
-      const diff = g.state === "pre" ? 0 : (t === g.home ? g.homeScore - g.awayScore : g.awayScore - g.homeScore);
-      const [r1, r0] = P(t, 75, 1, g.state === "pre" ? 0 : diff, false);
-      html += boardHTML(t, `${TEAMS[t] || t} ${g.state === "pre" ? "opening drive" : "next drive"}`, "Starting at their own 25", r1, today, false, r0);
-    }
+  const last = list[list.length - 1];
+  const cur = g.state === "in" && last && !last.dr.done ? last : null;
+  if (cur) {
+    const dr = cur.dr;
+    const markFn = r => cur.caught[r.p.id] ? `<span class="yes">✓${cur.caught[r.p.id] > 1 ? "×" + cur.caught[r.p.id] : ""}</span>` : cur.targeted[r.p.id] ? `<span class="tgt">targeted</span>` : "–";
+    html += boardHTML(dr.team, `${TEAMS[dr.team] || dr.team} drive`, `Picked at ${spotText(dr.team, dr.y100)} · 1st & 10 · ${qtr(dr.period)} ${dr.clock}. Checkmarks fill in as passes are caught.`, cur.res,
+      { locked: true, markLabel: "This drive", markFn, caught: cur.caught });
+    const other = dr.team === g.home ? g.away : g.home;
+    html += upNext(other, "up next");
+  } else if (g.state === "in") {
+    const nextT = poss || g.home;
+    html += upNext(nextT, "drive about to start");
+    html += upNext(nextT === g.home ? g.away : g.home, "after that");
+  } else if (g.state === "pre") {
+    html += upNext(g.away, "opening drive") + upNext(g.home, "opening drive");
   }
+  html += logHTML(g, list);
+  if (g.state === "post" && !list.length) html += `<p class="note">Drive details for this game aren't available.</p>`;
   $("boards").innerHTML = html;
   const outs = [g.away, g.home].flatMap(t => (MODEL.teams[t]?.players || []).filter(p => p.espn && outSet.has(p.espn)).map(p => `${p.name} (${t})`));
   $("outsBox").hidden = !outs.length; $("outsText").textContent = outs.join(", ") + ". Their targets are spread to teammates.";
@@ -388,6 +475,17 @@ function initTheme() {
   paintThemeBtn();
 }
 
+const T = (name, caught) => ({ name, caught });
+const EXAMPLE_DETAIL = { ex1: { out: [], drives: [
+  { id: "e1", team: "KC", period: 1, clock: "15:00", halfSeconds: 1800, y100: 75, home0: 0, away0: 0, result: "Touchdown", done: true, snaps: 6, targets: [T("X.Worthy", true), T("T.Kelce", false), T("T.Kelce", true), T("X.Worthy", true)] },
+  { id: "e2", team: "BUF", period: 1, clock: "10:48", halfSeconds: 1548, y100: 75, home0: 7, away0: 0, result: "Touchdown", done: true, snaps: 8, targets: [T("K.Shakir", true), T("D.Kincaid", false), T("K.Coleman", true), T("D.Kincaid", true)] },
+  { id: "e3", team: "KC", period: 1, clock: "5:31", halfSeconds: 1231, y100: 80, home0: 7, away0: 7, result: "Field Goal", done: true, snaps: 7, targets: [T("T.Kelce", true), T("K.Walker III", true), T("X.Worthy", false)] },
+  { id: "e4", team: "BUF", period: 2, clock: "13:02", halfSeconds: 782, y100: 70, home0: 10, away0: 7, result: "Touchdown", done: true, snaps: 9, targets: [T("K.Shakir", true), T("K.Shakir", true), T("D.Kincaid", true)] },
+  { id: "e5", team: "KC", period: 2, clock: "7:15", halfSeconds: 435, y100: 75, home0: 10, away0: 14, result: "Field Goal", done: true, snaps: 10, targets: [T("X.Worthy", true), T("T.Kelce", true), T("N.Gray", false), T("X.Worthy", true)] },
+  { id: "e6", team: "BUF", period: 3, clock: "15:00", halfSeconds: 1800, y100: 75, home0: 13, away0: 14, result: "Field Goal", done: true, snaps: 8, targets: [T("K.Coleman", false), T("K.Shakir", true)] },
+  { id: "e7", team: "KC", period: 3, clock: "9:10", halfSeconds: 1450, y100: 75, home0: 13, away0: 17, result: "", done: false, snaps: 3, targets: [T("T.Kelce", true)] },
+] } };
+
 function setup() {
   initTheme();
   $("dataLine").textContent = `Model: ${MODEL.season} through Week ${MODEL.through_week}`;
@@ -397,7 +495,7 @@ function setup() {
     const n = document.createElement("div"); n.className = "yd"; n.style.left = yd + "%"; n.textContent = yd <= 50 ? yd : 100 - yd; field.insertBefore(n, $("los"));
   }
   $("backBtn").addEventListener("click", () => { location.hash = ""; });
-  window.addEventListener("hashchange", () => { prevPc = {}; poll(); });
+  window.addEventListener("hashchange", () => { poll(); });
   drawCalib();
   poll();
   setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);

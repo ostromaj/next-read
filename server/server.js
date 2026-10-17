@@ -66,6 +66,52 @@ function simplifyScoreboard(sb) {
   return games;
 }
 
+// "P.Mahomes pass short right to T.Kelce to BUF 14 for 6 yards" -> { name: "T.Kelce", caught: true }
+function parseTarget(text) {
+  if (!text || !/\bpass\b/i.test(text)) return null;
+  if (/no play|nullified|two-point|two point|conversion attempt|spiked/i.test(text)) return null;
+  const m = /\bpass\b([^]*?)\b(?:to|intended for)\s+([A-Z][^\s.]*\.\s?[^]*)$/.exec(text);
+  if (!m) return null;
+  const toks = m[2].split(/\s+/), parts = [toks[0].replace(/[),;:]+$/, "")];
+  for (const tk of toks.slice(1)) {
+    const t = tk.replace(/[),;:]+$/, "");
+    if (parts.length < 3 && (/^(Jr\.?|Sr\.?|II|III|IV|V)$/.test(t) || /^[A-Z][a-z'’-]+\.?$/.test(t))) parts.push(t); else break;
+  }
+  const name = parts.join(" ").replace(/\.$/, "");
+  return { name, caught: !/incomplete/i.test(m[1]) && !/intercepted/i.test(text) };
+}
+
+// ESPN drives -> each drive's start spot, score at the start, and every target in it (in order)
+function simplifyDrives(s) {
+  const dd = s.drives || {};
+  const list = [...(dd.previous || [])];
+  if (dd.current && !list.some(x => x.id === dd.current.id)) list.push(dd.current);
+  let h = 0, a = 0;
+  return list.map((dr, i) => {
+    const team = abbr(dr.team?.abbreviation || "");
+    const plays = dr.plays || [];
+    const snaps = plays.filter(p => p.start && p.start.down > 0);
+    const p0 = snaps[0] || plays[0] || {};
+    let y100 = p0.start?.yardsToEndzone;
+    if (y100 == null) y100 = yardline100(dr.start?.text || p0.start?.possessionText, team);
+    const period = dr.start?.period?.number ?? p0.period?.number ?? null;
+    const clockText = dr.start?.clock?.displayValue ?? p0.clock?.displayValue ?? "";
+    const clk = clockSeconds(clockText);
+    const h0 = h, a0 = a;
+    for (const p of plays) { if (p.homeScore != null) h = +p.homeScore; if (p.awayScore != null) a = +p.awayScore; }
+    const targets = [];
+    for (const p of plays) { const t = parseTarget(p.text); if (t) targets.push(t); }
+    const result = dr.displayResult || dr.result || "";
+    return {
+      id: String(dr.id ?? i), team, period, clock: clockText,
+      halfSeconds: clk == null || period == null ? null : (period === 2 || period === 4 ? clk : clk + 900),
+      y100: y100 ?? null, startText: dr.start?.text || p0.start?.possessionText || "",
+      home0: h0, away0: a0, result, done: !!result || i < list.length - 1,
+      snaps: snaps.length, targets,
+    };
+  });
+}
+
 function simplifySummary(s) {
   const out = new Set();
   for (const team of s.injuries || []) {
@@ -88,7 +134,7 @@ function simplifySummary(s) {
       }
     }
   }
-  return { out: [...out], receiving, teamTargets };
+  return { out: [...out], receiving, teamTargets, drives: simplifyDrives(s) };
 }
 
 // tiny cache so many viewers share one upstream request
@@ -139,4 +185,4 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (require.main === module) server.listen(PORT, () => console.log(`Next Read on http://localhost:${PORT}`));
-module.exports = { simplifyScoreboard, simplifySummary, yardline100 };
+module.exports = { simplifyScoreboard, simplifySummary, simplifyDrives, parseTarget, yardline100 };
