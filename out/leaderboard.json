@@ -1,0 +1,138 @@
+{
+ "built": "2026-10-18",
+ "through_week": 6,
+ "test_weeks": [
+  4,
+  5,
+  6
+ ],
+ "incumbent": "current",
+ "winner": "pass_rate",
+ "switched": true,
+ "switch_confidence": 0.974,
+ "rule": "challenger must win >= 90% of bootstrap resamples and cut Brier by >= 0.1%",
+ "board": [
+  {
+   "name": "rate_pace",
+   "label": "Base + pass rate + pace",
+   "deployable": true,
+   "brier": 0.12666,
+   "vs_naive_pct": 2.78,
+   "top_pick_caught": 0.322,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13155,
+    "5": 0.12419,
+    "6": 0.09839
+   },
+   "vs_incumbent_gain_pct": 0.205,
+   "p_beats_incumbent": 0.852,
+   "p_beats_winner": 0.583
+  },
+  {
+   "name": "pass_rate",
+   "label": "Base + live pass rate",
+   "deployable": true,
+   "brier": 0.12671,
+   "vs_naive_pct": 2.74,
+   "top_pick_caught": 0.322,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13182,
+    "5": 0.12389,
+    "6": 0.09993
+   },
+   "vs_incumbent_gain_pct": 0.165,
+   "p_beats_incumbent": 0.974
+  },
+  {
+   "name": "pace",
+   "label": "Base + live pace",
+   "deployable": true,
+   "brier": 0.1269,
+   "vs_naive_pct": 2.6,
+   "top_pick_caught": 0.322,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13161,
+    "5": 0.12453,
+    "6": 0.09946
+   },
+   "p_beats_winner": 0.219
+  },
+  {
+   "name": "ml_logistic",
+   "label": "ML: logistic regression",
+   "deployable": true,
+   "brier": 0.1269,
+   "vs_naive_pct": 2.6,
+   "top_pick_caught": 0.34,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13208,
+    "5": 0.12399,
+    "6": 0.10043
+   },
+   "p_beats_winner": 0.228
+  },
+  {
+   "name": "same_day",
+   "label": "Base + same-day games",
+   "deployable": false,
+   "brier": 0.12691,
+   "vs_naive_pct": 2.59,
+   "top_pick_caught": 0.322,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13187,
+    "5": 0.12416,
+    "6": 0.10098
+   },
+   "p_beats_winner": 0.034
+  },
+  {
+   "name": "current",
+   "label": "Base: situations + live catches",
+   "deployable": true,
+   "brier": 0.12692,
+   "vs_naive_pct": 2.58,
+   "top_pick_caught": 0.322,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13188,
+    "5": 0.12419,
+    "6": 0.10098
+   },
+   "p_beats_winner": 0.026
+  },
+  {
+   "name": "ml_boosted",
+   "label": "ML: boosted trees",
+   "deployable": false,
+   "brier": 0.12872,
+   "vs_naive_pct": 1.2,
+   "top_pick_caught": 0.298,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13501,
+    "5": 0.12475,
+    "6": 0.10179
+   },
+   "p_beats_winner": 0.0
+  },
+  {
+   "name": "naive",
+   "label": "Season share only",
+   "deployable": false,
+   "brier": 0.13028,
+   "vs_naive_pct": 0.0,
+   "top_pick_caught": 0.277,
+   "drives": 692,
+   "by_week": {
+    "4": 0.13642,
+    "5": 0.12659,
+    "6": 0.10192
+   }
+  }
+ ]
+}

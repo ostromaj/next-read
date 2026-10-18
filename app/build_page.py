@@ -10,7 +10,10 @@ root = pathlib.Path(__file__).resolve().parent.parent
 tpl = (root / "app" / "template.html").read_text()
 model = (root / "out" / "model.json").read_text()
 bt = json.loads((root / "out" / "backtest_summary.json").read_text())
-page = tpl.replace("/*MODEL*/null", model).replace("/*BACKTEST*/null", json.dumps(bt, separators=(",", ":")))
+lb_path = root / "out" / "leaderboard.json"
+lb = json.loads(lb_path.read_text()) if lb_path.exists() else None
+page = (tpl.replace("/*MODEL*/null", model).replace("/*BACKTEST*/null", json.dumps(bt, separators=(",", ":")))
+        .replace("/*LEADERBOARD*/null", json.dumps(lb, separators=(",", ":"))))
 (root / "app" / "index.html").write_text(page)
 
 head = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'

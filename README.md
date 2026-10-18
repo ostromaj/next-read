@@ -11,9 +11,25 @@ Live NFL drive predictions: for the team with the ball, each receiver's chance o
 | `out/backtest_summary.json` | Weeks 3–5 backtest results |
 | `app/template.html` | The app (one page, works on phones and desktops) |
 | `app/build_page.py` | Puts the model into the page |
-| `server/` | Small Node server: hosts the page, `/api/games` (live scoreboard) and `/api/game/:id` (players out, catches so far) |
+| `server/` | Small Node server: hosts the page and adds live game situations at `/api/live` |
 
-## Update the model each week (Tuesday, after Monday night)
+## Weekly model tryouts (runs every Tuesday)
+
+`model/lab.py` tests every candidate model the same way: each week is predicted at the first snap of every drive,
+using only games played before it, with settings tuned only on earlier weeks. Candidates:
+
+| Name | What it adds |
+| --- | --- |
+| `current` | Situation-aware target shares + live in-game catches/targets (the base) |
+| `pass_rate` | + how pass-heavy the team is in this game vs. its season rate |
+| `pace` | + plays per drive in this game |
+| `rate_pace` | + both |
+| `same_day` | + games that finished earlier the same day (tested only) |
+| `ml_logistic` | Machine learning: logistic regression on every past player-drive |
+| `ml_boosted` | Machine learning: gradient-boosted trees (tested only) |
+
+A challenger replaces the model on the site only if it wins at least 90% of bootstrap resamples of the test drives
+**and** cuts the Brier score by at least 0.1%. `out/selection.json` remembers which model is on the site.
 
 ```bash
 mkdir -p data
@@ -21,12 +37,12 @@ for y in 2024 2025 2026; do
   curl -L -o data/pbp_$y.csv.gz https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_$y.csv.gz
 done
 curl -L -o data/rosters_2026.csv https://github.com/nflverse/nflverse-data/releases/download/weekly_rosters/roster_weekly_2026.csv
-pip install pandas numpy
-DECAY=0.85 K_CTX=40 A_SHARE=15 CAL=0.8 K_LIVE=25 KC_LIVE=10 python3 model/build_model.py data data out
-python3 app/build_page.py
+pip install pandas numpy scikit-learn
+python3 -I model/lab.py data out      # writes out/model.json, leaderboard.json, backtest_summary.json, selection.json
+python3 -I app/build_page.py          # puts the winner into the site
 ```
 
-To re-check accuracy on a finished week (example: Week 6), add `--holdout-week 6`.
+`model/build_model.py` is the original single-model script, kept for reference.
 
 ## Run it with live data on your computer
 
@@ -37,14 +53,15 @@ cd server
 node server.js
 ```
 
-Open http://localhost:3000. Every game this week is listed. Tap one and the board follows whoever has the ball, refreshing every 4 seconds.
+Open http://localhost:3000. During games, a "Live games" list appears. Tap a game and the board follows it every 15 seconds.
 
 ## Put it online for free (website + phone app)
 
 1. Make a free GitHub account and upload this folder as a new repository.
 2. On render.com, create a **Web Service** from that repository.
-   - Build command: `echo ok`
-   - Start command: `node server/server.js`
+   - Root directory: `server`
+   - Build command: leave blank
+   - Start command: `node server.js`
    - Instance type: Free
 3. Open the URL Render gives you.
 4. On a phone, open that URL and choose **Add to Home Screen**. It then opens like an app.

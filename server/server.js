@@ -91,6 +91,9 @@ function simplifyDrives(s) {
     const team = abbr(dr.team?.abbreviation || "");
     const plays = dr.plays || [];
     const snaps = plays.filter(p => p.start && p.start.down > 0);
+    // scrimmage plays the way nflverse counts them: passes (incl. sacks) and runs (incl. scrambles); no punts, kicks, kneels, spikes or wiped-out plays
+    const scrim = snaps.filter(p => !/no play|punts|field goal|kneels|spiked|extra point|two-point|timeout|end of|kicks/i.test(p.text || ""));
+    const passes = scrim.filter(p => /\bpass\b|sacked/i.test(p.text || "")).length;
     const p0 = snaps[0] || plays[0] || {};
     let y100 = p0.start?.yardsToEndzone;
     if (y100 == null) y100 = yardline100(dr.start?.text || p0.start?.possessionText, team);
@@ -107,7 +110,7 @@ function simplifyDrives(s) {
       halfSeconds: clk == null || period == null ? null : (period === 2 || period === 4 ? clk : clk + 900),
       y100: y100 ?? null, startText: dr.start?.text || p0.start?.possessionText || "",
       home0: h0, away0: a0, result, done: !!result || i < list.length - 1,
-      snaps: snaps.length, targets,
+      snaps: scrim.length, passes, targets,
     };
   });
 }
