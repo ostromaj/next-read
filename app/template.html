@@ -43,6 +43,36 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .theme-btn:hover { border-color: var(--yellow); }
 .banner { background: var(--panel); border: 1px dashed var(--yellow); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
 
+/* View tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.tab { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+  text-decoration: none; padding: 8px 12px 9px; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--ink); }
+.tab[aria-current="page"] { color: var(--ink); border-bottom-color: var(--yellow); }
+
+/* Best picks */
+.picks-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 14px 0 12px; }
+.picks-head h2 { margin: 0 0 4px; font-family: var(--display); font-weight: 800; font-size: 26px; text-transform: uppercase; letter-spacing: .02em; }
+.picks-head .note { margin: 0; max-width: 60ch; }
+.seg2 { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+.seg2 button { background: transparent; border: 0; padding: 7px 12px; font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .03em; color: var(--muted); }
+.seg2 button + button { border-left: 1px solid var(--line); }
+.seg2 button[aria-pressed="true"] { background: var(--yellow-fill); color: #12161d; }
+.pk-cols, .pk { display: grid; grid-template-columns: 30px 1fr 60px 58px; gap: 10px; align-items: center; }
+.pk-cols { padding: 10px 16px 8px; color: var(--muted); font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.pk-cols span:nth-child(n+3) { text-align: right; }
+ol.picks { list-style: none; margin: 0; padding: 0; }
+.pk { padding: 10px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+.pk:first-child { border-top: 0; }
+.pk:hover, .pk:focus-visible { background: color-mix(in srgb, var(--yellow-fill) 8%, transparent); }
+.pk .rk { font-family: var(--display); font-weight: 700; font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pk.top1 .rk { color: var(--yellow); }
+.pk .onf { color: var(--live); font-weight: 600; }
+.pk .yes { color: var(--good); font-weight: 800; margin-left: 4px; }
+.picks-foot { padding: 12px 16px 14px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.more { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font-family: var(--display); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: 14px; }
+.empty-picks { padding: 22px 16px; color: var(--muted); }
+
 /* Game list */
 .group h2 { font-family: var(--display); font-size: 15px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
 .games { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
@@ -170,6 +200,24 @@ ol.drives { list-style: none; margin: 0; padding: 0; }
       <button type="button" class="theme-btn" id="themeBtn" aria-label="Switch to dark mode"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path id="themeIcon" fill="currentColor" d=""/></svg><span id="themeLbl">Dark</span></button></div>
   </header>
   <div class="banner" id="exampleBanner" hidden>Example games shown. This preview can't reach the live feed, so these scores are made up. The hosted app shows real games automatically.</div>
+
+  <nav class="tabs" id="tabs" aria-label="Views">
+    <a href="#" class="tab" id="tabGames">Games</a>
+    <a href="#picks" class="tab" id="tabPicks">Best picks</a>
+  </nav>
+
+  <main id="picksView" hidden>
+    <div class="picks-head">
+      <div>
+        <h2>Best current picks</h2>
+        <p class="note">Every receiver in today's games, ranked by his chance of a catch on his team's current or next drive. A drive in progress keeps the pick it locked at its first snap.</p>
+      </div>
+      <div class="seg2" id="pickFilter" role="group" aria-label="Filter picks">
+        <button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="live" aria-pressed="false">On the field</button><button type="button" data-f="pre" aria-pressed="false">Upcoming</button>
+      </div>
+    </div>
+    <div class="board" id="picksBoard"></div>
+  </main>
 
   <main id="listView">
     <div id="gameGroups"></div>
@@ -304,13 +352,24 @@ function analyzeDrives(g, d, outSet) {
 }
 
 // ---------- data feed ----------
+const detailAt = {};
+async function refreshDetails(ids, maxAgeMs) {
+  const due = ids.filter(id => !detailAt[id] || Date.now() - detailAt[id] > maxAgeMs);
+  await Promise.all(due.map(async id => {
+    try { detail[id] = await getJSON("api/game/" + encodeURIComponent(id)); detailAt[id] = Date.now(); } catch (e) {}
+  }));
+}
 async function getJSON(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
 async function poll() {
   try {
     const j = await getJSON("api/games");
     games = j.games || []; example = false; lastOk = Date.now();
     const hm = /^#g(\w+)$/.exec(location.hash); current = hm ? hm[1] : null;
-    if (current) { try { detail[current] = await getJSON("api/game/" + encodeURIComponent(current)); } catch (e) {} }
+    if (current) { try { detail[current] = await getJSON("api/game/" + encodeURIComponent(current)); detailAt[current] = Date.now(); } catch (e) {} }
+    if (location.hash === "#picks") {
+      await refreshDetails(games.filter(g => g.state === "in").map(g => g.id), 8000);
+      await refreshDetails(games.filter(g => g.state === "pre").map(g => g.id), 180000);
+    }
   } catch (e) {
     if (!lastOk) { games = EXAMPLE_GAMES; example = true; Object.assign(detail, EXAMPLE_DETAIL); }
   }
@@ -326,11 +385,70 @@ function renderPill() {
 
 // ---------- views ----------
 function route() {
+  const picks = location.hash === "#picks";
   const m = /^#g(\w+)$/.exec(location.hash);
   current = m ? m[1] : null;
   const g = current && games.find(x => x.id === current);
-  $("listView").hidden = !!g; $("gameView").hidden = !g;
-  if (g) renderGame(g); else renderList();
+  $("gameView").hidden = !g; $("tabs").hidden = !!g;
+  $("picksView").hidden = !!g || !picks; $("listView").hidden = !!g || picks;
+  $("tabGames").setAttribute("aria-current", !g && !picks ? "page" : "false");
+  $("tabPicks").setAttribute("aria-current", !g && picks ? "page" : "false");
+  if (!g) lastList = picks ? "picks" : "";
+  $("backBtn").textContent = lastList ? "Best picks" : "All games";
+  if (g) renderGame(g); else if (picks) renderPicks(); else renderList();
+}
+
+// ---------- best picks: every receiver in live and upcoming games, ranked ----------
+let pickFilter = "all", showAllPicks = false, lastList = "";
+function gameRows(g) {
+  const d = detail[g.id] || {}, outSet = new Set(d.out || []);
+  const { list, sofar } = analyzeDrives(g, d, outSet);
+  const rows = [];
+  const add = (team, res, ctx, live, cur) => {
+    if (!res) return;
+    res.rows.forEach(r => rows.push({ g, team, p: r.p, pc: r.pc, pt: r.pt, ctx, live, caught: cur ? cur.caught[r.p.id] || 0 : 0 }));
+  };
+  const proj = t => {
+    const st = sofar[t] || { byId: {}, total: 0, live: null };
+    const diff = g.state === "pre" ? 0 : (t === g.home ? g.homeScore - g.awayScore : g.awayScore - g.homeScore);
+    return predict(t, 75, 1, diff, false, outSet, st.byId, st.total, st.live);
+  };
+  if (g.state === "pre") {
+    for (const t of [g.away, g.home]) add(t, proj(t), `Opening drive · ${kickoff(g.date)}`, false);
+  } else if (g.state === "in") {
+    const last = list[list.length - 1], cur = last && !last.dr.done ? last : null;
+    if (cur) {
+      add(cur.dr.team, cur.res, `On the field · ${statusText(g)}`, true, cur);
+      const other = cur.dr.team === g.home ? g.away : g.home;
+      add(other, proj(other), `Next drive · ${statusText(g)}`, false);
+    } else {
+      for (const t of [g.away, g.home]) add(t, proj(t), `Next drive · ${statusText(g)}`, false);
+    }
+  }
+  return rows;
+}
+function renderPicks() {
+  document.querySelectorAll("#pickFilter button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === pickFilter)));
+  let rows = games.filter(g => g.state !== "post").flatMap(gameRows);
+  if (pickFilter === "live") rows = rows.filter(r => r.live);
+  if (pickFilter === "pre") rows = rows.filter(r => r.g.state === "pre");
+  rows.sort((a, b) => b.pc - a.pc);
+  const box = $("picksBoard");
+  if (!rows.length) {
+    const why = pickFilter === "live" ? "No team has the ball right now. Picks show up here as soon as a drive starts."
+      : pickFilter === "pre" ? "No games left to kick off today." : "No live or upcoming games right now. This week's games show up here automatically.";
+    box.innerHTML = `<p class="empty-picks">${why}</p>`; return;
+  }
+  const shown = showAllPicks ? rows : rows.slice(0, 30), maxPc = rows[0].pc || 0.01;
+  box.innerHTML = `<div class="pk-cols"><span>#</span><span>Receiver</span><span>Catch</span><span>Target</span></div>
+    <ol class="picks">${shown.map((r, i) => `<li class="pk${i === 0 ? " top1" : ""}" data-g="${esc(r.g.id)}" tabindex="0" role="link" aria-label="${esc(r.p.name)}, ${pct(r.pc)} catch chance. Open ${esc(r.g.away)} at ${esc(r.g.home)}">
+      <span class="rk">${i + 1}</span>
+      <div class="who"><div class="nm">${esc(r.p.name)}${r.caught ? '<span class="yes" title="Caught a pass this drive">✓</span>' : ""}</div>
+        <div class="sub"><span>${esc(r.p.pos)} · ${esc(TEAMS[r.team] || r.team)}</span><span>${esc(r.g.away)} @ ${esc(r.g.home)}</span><span class="${r.live ? "onf" : ""}">${esc(r.ctx)}</span></div>
+        <div class="barline"><i style="width:${(r.pc / maxPc * 100).toFixed(1)}%"></i></div></div>
+      <div class="r pc">${pct(r.pc)}</div><div class="r pt">${pct(r.pt)}</div></li>`).join("")}</ol>
+    <div class="picks-foot"><span>${rows.length} receivers in ${new Set(rows.map(r => r.g.id)).size} games. Tap one to open his game.</span>
+      ${rows.length > 30 ? `<button type="button" class="more" id="morePicks">${showAllPicks ? "Show top 30" : `Show all ${rows.length}`}</button>` : ""}</div>`;
 }
 function kickoff(iso) {
   const d = new Date(iso);
@@ -532,7 +650,11 @@ function setup() {
     const t = document.createElement("div"); t.className = "tick"; t.style.left = yd + "%"; field.insertBefore(t, $("los"));
     const n = document.createElement("div"); n.className = "yd"; n.style.left = yd + "%"; n.textContent = yd <= 50 ? yd : 100 - yd; field.insertBefore(n, $("los"));
   }
-  $("backBtn").addEventListener("click", () => { location.hash = ""; });
+  $("backBtn").addEventListener("click", () => { location.hash = lastList; });
+  document.querySelectorAll("#pickFilter button").forEach(b => b.addEventListener("click", () => { pickFilter = b.dataset.f; showAllPicks = false; renderPicks(); }));
+  const open = e => { const li = e.target.closest(".pk"); if (li) location.hash = "g" + li.dataset.g; };
+  $("picksBoard").addEventListener("click", e => { if (e.target.closest("#morePicks")) { showAllPicks = !showAllPicks; renderPicks(); return; } open(e); });
+  $("picksBoard").addEventListener("keydown", e => { if (e.key === "Enter") open(e); });
   window.addEventListener("hashchange", () => { poll(); });
   drawCalib();
   poll();

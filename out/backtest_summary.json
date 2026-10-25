@@ -4,44 +4,45 @@
  "test_weeks": [
   4,
   5,
-  6
+  6,
+  7
  ],
- "drives": 692,
- "player_drives": 6334,
- "brier": 0.12671,
- "brier_naive": 0.13028,
- "improvement_pct": 2.74,
- "top_pick_caught": 0.322,
+ "drives": 995,
+ "player_drives": 9195,
+ "brier": 0.12584,
+ "brier_naive": 0.12941,
+ "improvement_pct": 2.76,
+ "top_pick_caught": 0.34,
  "calibration": [
   {
    "bin": "(0.0, 0.1]",
    "pred": 0.057,
-   "actual": 0.071,
-   "n": 2439
+   "actual": 0.066,
+   "n": 3524
   },
   {
    "bin": "(0.1, 0.2]",
    "pred": 0.147,
    "actual": 0.149,
-   "n": 1980
+   "n": 2909
   },
   {
    "bin": "(0.2, 0.3]",
    "pred": 0.246,
-   "actual": 0.261,
-   "n": 1201
+   "actual": 0.264,
+   "n": 1743
   },
   {
    "bin": "(0.3, 0.4]",
    "pred": 0.342,
-   "actual": 0.329,
-   "n": 498
+   "actual": 0.347,
+   "n": 740
   },
   {
    "bin": "(0.4, 1.0]",
-   "pred": 0.45,
-   "actual": 0.454,
-   "n": 216
+   "pred": 0.451,
+   "actual": 0.434,
+   "n": 279
   }
  ]
 }
