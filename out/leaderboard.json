@@ -1,11 +1,12 @@
 {
- "built": "2026-10-25",
- "through_week": 7,
+ "built": "2026-10-31",
+ "through_week": 8,
  "test_weeks": [
   4,
   5,
   6,
-  7
+  7,
+  8
  ],
  "incumbent": "pass_rate",
  "winner": "pass_rate",
@@ -17,118 +18,125 @@
    "name": "pass_rate",
    "label": "Base + live pass rate",
    "deployable": true,
-   "brier": 0.12584,
-   "vs_naive_pct": 2.76,
-   "top_pick_caught": 0.34,
-   "drives": 995,
+   "brier": 0.12765,
+   "vs_naive_pct": 2.73,
+   "top_pick_caught": 0.357,
+   "drives": 1262,
    "by_week": {
     "4": 0.13182,
     "5": 0.12389,
     "6": 0.12043,
-    "7": 0.14684
+    "7": 0.13468,
+    "8": 0.14261
    }
   },
   {
    "name": "rate_pace",
    "label": "Base + pass rate + pace",
    "deployable": true,
-   "brier": 0.12585,
-   "vs_naive_pct": 2.75,
-   "top_pick_caught": 0.337,
-   "drives": 995,
+   "brier": 0.12768,
+   "vs_naive_pct": 2.71,
+   "top_pick_caught": 0.352,
+   "drives": 1262,
    "by_week": {
     "4": 0.13155,
     "5": 0.12419,
     "6": 0.12037,
-    "7": 0.1482
+    "7": 0.13477,
+    "8": 0.14343
    },
-   "vs_incumbent_gain_pct": -0.008,
-   "p_beats_incumbent": 0.466,
-   "p_beats_winner": 0.466
-  },
-  {
-   "name": "ml_logistic",
-   "label": "ML: logistic regression",
-   "deployable": true,
-   "brier": 0.12594,
-   "vs_naive_pct": 2.68,
-   "top_pick_caught": 0.349,
-   "drives": 995,
-   "by_week": {
-    "4": 0.13208,
-    "5": 0.12399,
-    "6": 0.12037,
-    "7": 0.14711
-   },
-   "vs_incumbent_gain_pct": -0.079,
-   "p_beats_incumbent": 0.271,
-   "p_beats_winner": 0.271
+   "vs_incumbent_gain_pct": -0.024,
+   "p_beats_incumbent": 0.414,
+   "p_beats_winner": 0.414
   },
   {
    "name": "same_day",
    "label": "Base + same-day games",
    "deployable": false,
-   "brier": 0.12608,
-   "vs_naive_pct": 2.57,
-   "top_pick_caught": 0.34,
-   "drives": 995,
+   "brier": 0.12776,
+   "vs_naive_pct": 2.64,
+   "top_pick_caught": 0.353,
+   "drives": 1262,
    "by_week": {
     "4": 0.13187,
     "5": 0.12416,
     "6": 0.12083,
-    "7": 0.14756
+    "7": 0.13437,
+    "8": 0.14221
    },
-   "p_beats_winner": 0.004
+   "p_beats_winner": 0.151
   },
   {
    "name": "current",
    "label": "Base: situations + live catches",
    "deployable": true,
-   "brier": 0.12609,
-   "vs_naive_pct": 2.57,
-   "top_pick_caught": 0.34,
-   "drives": 995,
+   "brier": 0.12777,
+   "vs_naive_pct": 2.64,
+   "top_pick_caught": 0.354,
+   "drives": 1262,
    "by_week": {
     "4": 0.13188,
     "5": 0.12419,
     "6": 0.12081,
-    "7": 0.14756
+    "7": 0.13438,
+    "8": 0.14221
    },
-   "vs_incumbent_gain_pct": -0.199,
-   "p_beats_incumbent": 0.004,
-   "p_beats_winner": 0.004
+   "vs_incumbent_gain_pct": -0.094,
+   "p_beats_incumbent": 0.142,
+   "p_beats_winner": 0.142
+  },
+  {
+   "name": "ml_logistic",
+   "label": "ML: logistic regression",
+   "deployable": true,
+   "brier": 0.12777,
+   "vs_naive_pct": 2.64,
+   "top_pick_caught": 0.36,
+   "drives": 1262,
+   "by_week": {
+    "4": 0.13208,
+    "5": 0.12399,
+    "6": 0.12037,
+    "7": 0.13486,
+    "8": 0.14266
+   },
+   "vs_incumbent_gain_pct": -0.094,
+   "p_beats_incumbent": 0.284,
+   "p_beats_winner": 0.284
   },
   {
    "name": "pace",
    "label": "Base + live pace",
    "deployable": true,
-   "brier": 0.12619,
-   "vs_naive_pct": 2.49,
-   "top_pick_caught": 0.337,
-   "drives": 995,
+   "brier": 0.12792,
+   "vs_naive_pct": 2.53,
+   "top_pick_caught": 0.352,
+   "drives": 1262,
    "by_week": {
     "4": 0.13161,
     "5": 0.12453,
     "6": 0.12096,
-    "7": 0.14907
+    "7": 0.13476,
+    "8": 0.14275
    },
-   "vs_incumbent_gain_pct": -0.278,
-   "p_beats_incumbent": 0.034,
-   "p_beats_winner": 0.034
+   "vs_incumbent_gain_pct": -0.212,
+   "p_beats_incumbent": 0.092,
+   "p_beats_winner": 0.092
   },
   {
    "name": "ml_boosted",
    "label": "ML: boosted trees",
    "deployable": false,
-   "brier": 0.12738,
-   "vs_naive_pct": 1.57,
-   "top_pick_caught": 0.315,
-   "drives": 995,
+   "brier": 0.12889,
+   "vs_naive_pct": 1.79,
+   "top_pick_caught": 0.339,
+   "drives": 1262,
    "by_week": {
     "4": 0.13501,
     "5": 0.12475,
-    "6": 0.12111,
-    "7": 0.14642
+    "6": 0.12076,
+    "7": 0.13519,
+    "8": 0.14241
    },
    "p_beats_winner": 0.0
   },
@@ -136,15 +144,16 @@
    "name": "naive",
    "label": "Season share only",
    "deployable": false,
-   "brier": 0.12941,
+   "brier": 0.13123,
    "vs_naive_pct": 0.0,
-   "top_pick_caught": 0.285,
-   "drives": 995,
+   "top_pick_caught": 0.313,
+   "drives": 1262,
    "by_week": {
     "4": 0.13642,
     "5": 0.12659,
     "6": 0.12394,
-    "7": 0.1494
+    "7": 0.13786,
+    "8": 0.15
    }
   }
  ]

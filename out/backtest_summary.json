@@ -5,44 +5,45 @@
   4,
   5,
   6,
-  7
+  7,
+  8
  ],
- "drives": 995,
- "player_drives": 9195,
- "brier": 0.12584,
- "brier_naive": 0.12941,
- "improvement_pct": 2.76,
- "top_pick_caught": 0.34,
+ "drives": 1262,
+ "player_drives": 11637,
+ "brier": 0.12765,
+ "brier_naive": 0.13123,
+ "improvement_pct": 2.73,
+ "top_pick_caught": 0.357,
  "calibration": [
   {
    "bin": "(0.0, 0.1]",
    "pred": 0.057,
-   "actual": 0.066,
-   "n": 3524
+   "actual": 0.067,
+   "n": 4525
   },
   {
    "bin": "(0.1, 0.2]",
    "pred": 0.147,
-   "actual": 0.149,
-   "n": 2909
+   "actual": 0.155,
+   "n": 3620
   },
   {
    "bin": "(0.2, 0.3]",
-   "pred": 0.246,
-   "actual": 0.264,
-   "n": 1743
+   "pred": 0.245,
+   "actual": 0.266,
+   "n": 2150
   },
   {
    "bin": "(0.3, 0.4]",
    "pred": 0.342,
-   "actual": 0.347,
-   "n": 740
+   "actual": 0.359,
+   "n": 993
   },
   {
    "bin": "(0.4, 1.0]",
-   "pred": 0.451,
-   "actual": 0.434,
-   "n": 279
+   "pred": 0.454,
+   "actual": 0.45,
+   "n": 349
   }
  ]
 }
